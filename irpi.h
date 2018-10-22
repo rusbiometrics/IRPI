@@ -81,7 +81,7 @@ typedef struct Image {
 enum class TemplateRole {
     /** Enrollment template for 1:N */
     Enrollment_1N,
-    /** Verification template for 1:N */
+    /** Search template for 1:N */
     Search_1N
 };
 
@@ -172,8 +172,8 @@ typedef struct Candidate {
      * the candidate computation failed, this should be set to false. */
     bool isAssigned;
 
-    /** @brief The template ID from the enrollment database manifest */
-    std::string templateId;
+    /** @brief The template label from the enrollment set*/
+    size_t label;
 
     /** @brief Measure of similarity between the identification template
      * and the enrolled candidate.  Higher scores mean more likelihood that
@@ -185,16 +185,16 @@ typedef struct Candidate {
 
     Candidate() :
         isAssigned{false},
-        templateId{""},
+        label(0),
         similarityScore{0.0}
         {}
 
     Candidate(
         bool isAssigned,
-        std::string templateId,
+        size_t label,
         double similarityScore) :
         isAssigned{isAssigned},
-        templateId{templateId},
+        label(label),
         similarityScore{similarityScore}
         {}
 } Candidate;
@@ -276,32 +276,12 @@ public:
      * <b>at a minimum, copy the input data</b> or otherwise extract what is
      * needed for search.
      *
-     * @param[in] enrollmentDir
-     * The top-level directory in which enrollment data was placed. This
-     * variable allows an implementation
-     * to locate any private initialization data it elected to place in the
-     * directory.
-     * @param[in] edbName
-     * The name of a single file containing concatenated templates, i.e. the
-     * EDB described in <em>File structure for enrolled template collection</em>.
-     * While the file will have read-write-delete permission, the implementation
-     * should only alter the file if it preserves the necessary content, in
-     * other files for example.
-     * The file may be opened directly.  It is not necessary to prepend a
-     * directory name.  This is a IRPI-provided
-     * input - implementers shall not internally hard-code or assume any values.
-     * @param[in] edbManifestName
-     * The name of a single file containing the EDB manifest described in
-     * <em>File structure for enrolled template collection</em>.
-     * The file may be opened directly.  It is not necessary to prepend a
-     * directory name.  This is a NIST-provided
-     * input - implementers shall not internally hard-code or assume any values.
+     * @param[in] vtempl
+     * Vector of enrollment templates along with the labels identifiers
      */
     virtual ReturnStatus
     finalizeEnrollment(
-        const std::string &enrollmentDir,
-        const std::string &edbName,
-        const std::string &edbManifestName) = 0;
+        const std::vector<std::pair<size_t,std::vector<uint8_t>>> &vtempl) = 0;
 
     /** @brief This function will be called once prior to one or more calls to
      * identifyTemplate().  The function might set static internal variables
@@ -311,13 +291,10 @@ public:
      * @param[in] configDir
      * A read-only directory containing any developer-supplied configuration
      * parameters or run-time data files.
-     * @param[in] enrollmentDir
-     * The read-only top-level directory in which enrollment data was placed.
      */
     virtual ReturnStatus
     initializeIdentificationSession(
-        const std::string &configDir,
-        const std::string &enrollmentDir) = 0;
+        const std::string &configDir) = 0;
 
     /** @brief This function searches an identification template against the
      * enrollment set, and outputs a
@@ -347,7 +324,7 @@ public:
     virtual ReturnStatus
     identifyTemplate(
         const std::vector<uint8_t> &idTemplate,
-        const uint32_t candidateListLength,
+        const size_t candidateListLength,
         std::vector<Candidate> &candidateList,
         bool &decision) = 0;
 
