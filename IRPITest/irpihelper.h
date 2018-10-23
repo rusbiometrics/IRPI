@@ -15,39 +15,6 @@
 
 #include "irpi.h"
 
-//---------------------------------------------------
-
-struct BiometricTemplate
-{
-    BiometricTemplate() {} // default constructor is needed for std::vector<BiometricTemplate>
-
-    BiometricTemplate(size_t _label, IRPI::TemplateRole _role, std::vector<uint8_t> &&_data) :
-        label(_label),
-        role(_role),
-        data(std::move(_data)) {}
-
-    BiometricTemplate(BiometricTemplate&& other) :
-        label(other.label),
-        role(other.role),
-        data(std::move(other.data)) {}
-
-    BiometricTemplate& operator=(BiometricTemplate&& other)
-    {
-        if (this != &other) {
-            label = other.label;
-            role = other.role;
-            data = std::move(other.data);
-        }
-        return *this;
-    }
-
-    size_t               label;
-    IRPI::TemplateRole   role;
-    std::vector<uint8_t> data;
-};
-
-//---------------------------------------------------
-
 inline std::ostream&
 operator<<(
     std::ostream &s,
@@ -67,8 +34,6 @@ operator<<(
     }
 }
 
-//---------------------------------------------------
-
 inline std::ostream&
 operator<<(
     std::ostream &s,
@@ -76,8 +41,6 @@ operator<<(
 {
     return s << _qstring.toLocal8Bit().constData();
 }
-
-//---------------------------------------------------
 
 IRPI::Image readimage(const QString &_filename, QImage::Format _mTARgetformat=QImage::Format_RGB888, bool _verbose=false)
 {
@@ -123,75 +86,75 @@ IRPI::Image readimage(const QString &_filename, QImage::Format _mTARgetformat=QI
 }
 
 //---------------------------------------------------
-
-struct ROCPoint
+void computeFARandFRR(const std::vector<std::vector<IRPI::Candidate>> &_vcandidates, const std::vector<bool> &_vdecisions, const std::vector<size_t> &_vtruelabel, double &_far, double &_frr)
 {
-    ROCPoint() {}
-    double mTAR, mFAR, similarity;
+    size_t _tp = 0, _tn = 0, _fn = 0, _fp = 0;
+    for(size_t i = 0; i < _vcandidates.size(); ++i) {
+        // as irpi.h says - most similar entries appear first
+        const IRPI::Candidate &_mate = _vcandidates[i][0];
+        if(_vdecisions[i] == true) { // Vendor reports that mate has been found
+            if(_mate.label == _vtruelabel[i])
+                _tp++;
+            else
+                _fp++;
+        } else { // Vendor reports that mate can not be found
+            if(_mate.label == _vtruelabel[i])
+                _fn++;
+            else
+                _tn++;
+        }
+    }
+    _far = static_cast<double>(_fp) / (_fp + _tp + 1.e-6);
+    _frr = static_cast<double>(_fn) / (_tn + _fn + 1.e-6);
+}
+//--------------------------------------------------
+
+struct CMCPoint
+{
+    CMCPoint() : mTPIR(0), rank(0) {}
+    double mTPIR; // aka probability of true positive in top rank
+    size_t  rank;
 };
 
-//---------------------------------------------------
-
-std::vector<ROCPoint> computeROC(size_t _points, const std::vector<uint8_t> &_issameperson, size_t _totalpositive, size_t _totalnegative, const std::vector<double> &_similarity)
+std::vector<CMCPoint> computeCMC(const std::vector<std::vector<IRPI::Candidate>> &_vcandidates, const std::vector<size_t> &_vtruelabels)
 {
-    std::vector<ROCPoint> _vROC(_points,ROCPoint());
-
-    const double _maxsim = *std::max_element(_similarity.begin(), _similarity.end());
-    const double _minsim = *std::min_element(_similarity.begin(), _similarity.end());
-    const double _simstep = (_maxsim - _minsim)/_points;
-
-    #pragma omp parallel for
-    for(int i = 0; i < static_cast<int>(_points); ++i) { // openmp demands signed integral type to be used
-        const double _thresh = _minsim + i*_simstep;
-        uint8_t _same;
-        size_t  _truepositive = 0, _truenegative = 0;
-        for(size_t j = 0; j < _similarity.size(); ++j) {
-            _same = (_similarity[j] < _thresh) ? 0 : 1; // 1 - same, 0 - not the same
-            if((_same == 1) && (_issameperson[j] == 1))
-                _truepositive++;
-            else if((_same == 0) && (_issameperson[j] == 0))
-                _truenegative++;
+    // We need to count only assigned elements
+    size_t length = 0;
+    const std::vector<IRPI::Candidate> &_candidates = _vcandidates[0];
+    for(size_t &i = length; i < _candidates.size(); ++i) {
+        if(_candidates[i].isAssigned == false)
+            break;
+    }
+    // Let's count frequencies for ranks
+    std::vector<size_t> _vrankfrequency(length,0);
+    for(size_t i = 0; i < _vcandidates.size(); ++i) {
+        const std::vector<IRPI::Candidate> &_candidates = _vcandidates[i];
+        for(size_t j = 0; j < length; ++j) {
+            if(_candidates[j].label == _vtruelabels[i]) {
+                _vrankfrequency[j]++;
+                break;
+            }
         }
-        _vROC[i].mTAR = static_cast<double>(_truepositive) / _totalpositive;
-        _vROC[i].mFAR = 1.0 - static_cast<double>(_truenegative) / _totalnegative;
-        _vROC[i].similarity = _thresh;
     }
-    return _vROC;
+    // We are ready to save points
+    std::vector<CMCPoint> _vCMC(length,CMCPoint());
+    for(size_t i = 0; i < length; ++i) {
+        _vCMC[i].rank = i + 1;
+        for(size_t j = 0; j < _vCMC[i].rank; ++j) {
+            _vCMC[i].mTPIR += _vrankfrequency[j];
+        }
+        _vCMC[i].mTPIR /= _vcandidates.size();
+    }
+    return _vCMC;
 }
 
-//---------------------------------------------------
-
-double findArea(const std::vector<ROCPoint> &_roc)
-{
-    double _area = 0;
-    for(size_t i = 1; i < _roc.size(); ++i) {
-        _area += (_roc[i-1].mFAR - _roc[i].mFAR)*(_roc[i-1].mTAR + _roc[i].mTAR)/2.0;
-    }
-    return _area;
-}
-
-//---------------------------------------------------
-
-double findFRR(const std::vector<ROCPoint> &_roc, double _targetmFAR)
-{
-    for(size_t i = (_roc.size()-1); i >= 1; --i) { // not to 0 because of unsigned data type, we will hadle last value in final return
-        if(_roc[i].mFAR > _targetmFAR)
-            return 1.0 - _roc[i].mTAR;
-    }
-    return 1.0 - _roc[0].mTAR;
-}
-
-//---------------------------------------------------
-
-QJsonArray serializeROC(const std::vector<ROCPoint> &_roc)
+QJsonArray serializeCMC(const std::vector<CMCPoint> &_cmc)
 {
     QJsonArray _jsonarr;
-    for(size_t i = 0; i < _roc.size(); ++i) {
-        QJsonObject _jsonobj({
-                                 qMakePair(QLatin1String("FAR"),QJsonValue(_roc[i].mFAR)),
-                                 qMakePair(QLatin1String("TAR"),QJsonValue(_roc[i].mTAR)),
-                                 qMakePair(QLatin1String("similarity"),QJsonValue(_roc[i].similarity))
-                             });
+    for(size_t i = 0; i < _cmc.size(); ++i) {
+        QJsonObject _jsonobj;
+        _jsonobj["Rank"] = static_cast<qint64>(_cmc[i].rank);
+        _jsonobj["TPIR"] = _cmc[i].mTPIR;
         _jsonarr.push_back(qMove(_jsonobj));
     }
     return _jsonarr;

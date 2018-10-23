@@ -7,7 +7,7 @@
 #include <cstring>
 #include <cstdlib>
 
-#include "nullImpl.h"
+#include "nullimpl.h"
 
 using namespace std;
 using namespace IRPI;
