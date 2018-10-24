@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
     vetempl.reserve(validsubdirs * etpp);
     double etgentime = 0; // enrollment template gen time holder
     size_t eterrors = 0;  // enrollment template gen errors
-    size_t label = 0;
+    size_t label = 1;     // need to start from 1 because 0 reserved for default value in IRPI::Candidate
 
     for(int i = 0; i < subdirs.size(); ++i) {
         QDir _subdir(indir.absolutePath().append("/%1").arg(subdirs.at(i)));
@@ -223,14 +223,15 @@ int main(int argc, char *argv[])
     vtruelabel.reserve(validsubdirs * itpp + static_cast<size_t>(distractorfiles.size()));
     double itgentime = 0; // identification template gen time holder
     size_t iterrors = 0;  // identification template gen errors
-    label = 0;
+    label = 1;            // need to start from 1 because 0 reserved for default value in IRPI::Candidate
 
     for(int i = 0; i < subdirs.size(); ++i) {
         QDir _subdir(indir.absolutePath().append("/%1").arg(subdirs.at(i)));
         QStringList _files = _subdir.entryList(filefilters,QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
 
         if(static_cast<size_t>(_files.size()) >= minfilespp) {
-            std::cout << std::endl << "  Label: " << label << " - " << subdirs.at(i) << std::endl;
+            if(itpp > 0)
+                std::cout << std::endl << "  Label: " << label << " - " << subdirs.at(i) << std::endl;
 
             for(size_t j = etpp; j < minfilespp; ++j) {
                 if(verbose)
@@ -268,7 +269,7 @@ int main(int argc, char *argv[])
                 std::cout << "   " << status.code << std::endl;
                 std::cout << "   " << status.info << std::endl;
             }
-        } else {
+        } else {            
             vtruelabel.push_back(label);
             vitempl.push_back(std::move(_templ));
         }
@@ -292,10 +293,11 @@ int main(int argc, char *argv[])
     vcandidates.reserve(vitempl.size());
     std::vector<bool> vdecisions;
     vdecisions.reserve(vitempl.size());
-    bool decision = false;
+    bool decision;
     for(size_t i = 0; i < vitempl.size(); ++i) {
-        std::cout << std::endl << "  for template #" << i << std::endl;
+        std::cout << std::endl << "  for label " << vtruelabel[i] << std::endl;
         std::vector<IRPI::Candidate> vprediction;
+        decision = false;
         elapsedtimer.start();
         status = recognizer->identifyTemplate(vitempl[i],candidates,vprediction,decision);
         searchtimens += elapsedtimer.nsecsElapsed();
@@ -319,7 +321,7 @@ int main(int argc, char *argv[])
     std::cout << std::endl << "Results:" << std::endl
         << "  FAR: " << mFAR << std::endl
         << "  FRR: " << mFRR << std::endl;
-    std::vector<CMCPoint> vCMC = computeCMC(vcandidates,vtruelabel);
+    std::vector<CMCPoint> vCMC = computeCMC(vcandidates,vtruelabel,validsubdirs);
     std::cout << "  TPIR1: " << vCMC[0].mTPIR << std::endl;
 
     QDateTime enddt = QDateTime::currentDateTime();

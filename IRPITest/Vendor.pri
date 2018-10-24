@@ -4,9 +4,18 @@
 # so only API name should be specified here below
 
 # Specify API name according to the naming convention 'irpi_1N_[vendor]_[version]_(cpu/gpu)' =======
-API_NAME = irpi_1N_null_0_cpu
+API_NAME = irpi_1N_dlib_0_cpu
 
 # If Vendor's API depends on any 3rd parties software you may specify this below
+
+# Section for the Linux ====================================================
+linux {
+    # Specify where linker should seek your libraries and their 3rdparty dependencies
+    LIBS += -L$${PWD}/../API_bin/$${API_NAME}
+
+    # Specify libraries that should be linked
+    LIBS += -l$${API_NAME}
+}
 
 # Section for MS Windows ================================================
 win32 {
@@ -27,19 +36,12 @@ win32 {
 
     # Specify libraries that should be linked
     LIBS += -l$${API_NAME}
+
+    include(C:/Programming/SVT/Sources/API_samples/irpi_Face/$${API_NAME}/opencv.pri)
+    include(C:/Programming/SVT/Sources/API_samples/irpi_Face/$${API_NAME}/dlib.pri)
 }
 
-# Section for the Linux ====================================================
-linux {
-    # Specify where linker should seek your libraries and their 3rdparty dependencies
-    LIBS += -L$${PWD}/../API_bin/$${API_NAME}
+# ============
+DEFINES += VENDOR_API_NAME=\\\"$${API_NAME}\\\" # Do not modify
 
-    # Specify libraries that should be linked
-    LIBS += -l$${API_NAME}
-}
-
-# Do not modify =============================================
-DEFINES += VENDOR_API_NAME=\\\"$${API_NAME}\\\"
-
-INCLUDEPATH += $${PWD}/..
 

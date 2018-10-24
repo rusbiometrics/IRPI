@@ -116,7 +116,7 @@ struct CMCPoint
     size_t  rank;
 };
 
-std::vector<CMCPoint> computeCMC(const std::vector<std::vector<IRPI::Candidate>> &_vcandidates, const std::vector<size_t> &_vtruelabels)
+std::vector<CMCPoint> computeCMC(const std::vector<std::vector<IRPI::Candidate>> &_vcandidates, const std::vector<size_t> &_vtruelabels, const size_t _enrolllabelmax)
 {
     // We need to count only assigned elements
     size_t length = 0;
@@ -127,12 +127,16 @@ std::vector<CMCPoint> computeCMC(const std::vector<std::vector<IRPI::Candidate>>
     }
     // Let's count frequencies for ranks
     std::vector<size_t> _vrankfrequency(length,0);
+    size_t _instances = 0;
     for(size_t i = 0; i < _vcandidates.size(); ++i) {
-        const std::vector<IRPI::Candidate> &_candidates = _vcandidates[i];
-        for(size_t j = 0; j < length; ++j) {
-            if(_candidates[j].label == _vtruelabels[i]) {
-                _vrankfrequency[j]++;
-                break;
+        if(_vtruelabels[i] <= _enrolllabelmax) { // need to count only instances with mates
+            _instances++;
+            const std::vector<IRPI::Candidate> &_candidates = _vcandidates[i];
+            for(size_t j = 0; j < length; ++j) {
+                if(_candidates[j].label == _vtruelabels[i]) {
+                    _vrankfrequency[j]++;
+                    break;
+                }
             }
         }
     }
@@ -143,7 +147,7 @@ std::vector<CMCPoint> computeCMC(const std::vector<std::vector<IRPI::Candidate>>
         for(size_t j = 0; j < _vCMC[i].rank; ++j) {
             _vCMC[i].mTPIR += _vrankfrequency[j];
         }
-        _vCMC[i].mTPIR /= _vcandidates.size();
+        _vCMC[i].mTPIR /= _instances + 1e-6; // add epsilon here to prevent nan when _instances == 0
     }
     return _vCMC;
 }

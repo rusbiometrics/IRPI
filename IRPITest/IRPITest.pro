@@ -22,9 +22,11 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
         main.cpp
 
-include($${PWD}/Vendor.pri)
-include($${PWD}/openmp.pri)
-
 HEADERS += \
     irpihelper.h
+
+INCLUDEPATH += $${PWD}/..
+
+include($${PWD}/Vendor.pri)
+include($${PWD}/openmp.pri)
 
