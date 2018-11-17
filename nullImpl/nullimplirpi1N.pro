@@ -8,9 +8,9 @@ TEMPLATE = lib
 
 DEFINES += BUILD_SHARED_LIBRARY
 
-SOURCES += nullimpl.cpp
+SOURCES += nullimplirpi1N.cpp
 
-HEADERS += nullimpl.h
+HEADERS += nullimplirpi1N.h
            $${PWD}/../irpi.h
 
 INCLUDEPATH += $${PWD}/..
