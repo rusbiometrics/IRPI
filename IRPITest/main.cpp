@@ -360,7 +360,7 @@ int main(int argc, char *argv[])
     _ijson["Size_bytes"]  = static_cast<int>(identtemplsizebytes);
     jsonobj["Identification"] = _ijson;
 
-    jsonobj["searchtime_us"] = searchtimens * 1e-3;
+    jsonobj["Searchtime_us"] = searchtimens * 1e-3;
     jsonobj["Einittime_ms"]  = einittimems;
     jsonobj["Efinalizetime_ms"] = finalizetimems;
     jsonobj["Iinittime_ms"]  = iinittimems;
