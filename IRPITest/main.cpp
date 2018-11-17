@@ -10,23 +10,24 @@ int main(int argc, char *argv[])
     // Default input values
     QDir indir, outdir;
     indir.setPath(""); outdir.setPath("");
-    size_t itpp = 1, etpp = 1, candidates = 32;
-    bool verbose = false, rewriteoutput = false;
+    size_t itpp = 1, etpp = 1, candidates = 64;
+    bool verbose = false, rewriteoutput = false, enabledistractors = false;
     std::string apiresourcespath;
     QImage::Format qimgtargetformat = QImage::Format_RGB888;
     // If no args passed, show help
     if(argc == 1) {
         std::cout << APP_NAME << " version " << APP_VERSION << std::endl;
         std::cout << "Options:" << std::endl
-                  << "\t-g - force to open all images in 8-bit grayscale mode, if not set all images will be opened in 24-bit rgb color mode" << std::endl
-                  << "\t-i - input directory with the images, note that this directory should have irpi-compliant structure" << std::endl
-                  << "\t-o - output directory where result will be saved" << std::endl
-                  << "\t-r - path where Vendor's API should search resources" << std::endl
-                  << "\t-n - set how namy identification templates per person should be created (default: " << itpp << ")" << std::endl
-                  << "\t-e - set how namy enrollment templates per person should be created (default: " << etpp << ")" << std::endl
-                  << "\t-c - number of the candidates to search and at the same time a number of points for CMC curve (default: " << candidates << ")" << std::endl
-                  << "\t-s - be more verbose (print all measurements)" << std::endl
-                  << "\t-w - force output file to be rewritten if already existed" << std::endl;
+                  << "\t-g      - force to open all images in 8-bit grayscale mode, if not set all images will be opened in 24-bit rgb color mode" << std::endl
+                  << "\t-i[str] - input directory with the images, note that this directory should have irpi-compliant structure" << std::endl
+                  << "\t-o[str] - output directory where result will be saved" << std::endl
+                  << "\t-r[str] - path where Vendor's API should search resources" << std::endl
+                  << "\t-n[int] - set how namy identification templates per person should be created (default: " << itpp << ")" << std::endl
+                  << "\t-e[int] - set how namy enrollment templates per person should be created (default: " << etpp << ")" << std::endl
+                  << "\t-d      - enable search of distractors" << std::endl
+                  << "\t-c[int] - number of the candidates to search (default: " << candidates << ")" << std::endl
+                  << "\t-s      - be more verbose (print all measurements)" << std::endl
+                  << "\t-w      - force output file to be rewritten if already existed" << std::endl;
         return 0;
     }
     // Let's parse user's command input
@@ -58,6 +59,9 @@ int main(int argc, char *argv[])
                 break;           
             case 'c':
                 candidates = QString(++argv[0]).toUInt();
+                break;
+            case 'd':
+                enabledistractors = true;
                 break;
         }
     // Let's check if user have provided valid paths?
@@ -108,7 +112,11 @@ int main(int argc, char *argv[])
         std::cerr << std::endl << "There is 0 enrollment templates! Test could not be performed! Abort..." << std::endl;
         return 6;
     }
-    QStringList distractorfiles = indir.entryList(filefilters,QDir::Files | QDir::NoDotAndDotDot);
+
+    QStringList distractorfiles;
+    if(enabledistractors) {
+        distractorfiles = indir.entryList(filefilters,QDir::Files | QDir::NoDotAndDotDot);
+    }
     const size_t distractors = static_cast<size_t>(distractorfiles.size());
     std::cout << "  Distractor files: " << distractors << std::endl;
     if((validsubdirs*itpp + distractors) == 0) {
@@ -219,8 +227,8 @@ int main(int argc, char *argv[])
 
     std::vector<std::vector<uint8_t>> vitempl;
     std::vector<size_t> vtruelabel;
-    vitempl.reserve(validsubdirs * itpp + static_cast<size_t>(distractorfiles.size()));
-    vtruelabel.reserve(validsubdirs * itpp + static_cast<size_t>(distractorfiles.size()));
+    vitempl.reserve(validsubdirs * itpp + distractors);
+    vtruelabel.reserve(validsubdirs * itpp + distractors);
     double itgentime = 0; // identification template gen time holder
     size_t iterrors = 0;  // identification template gen errors
     label = 1;            // need to start from 1 because 0 reserved for default value in IRPI::Candidate
@@ -280,8 +288,8 @@ int main(int argc, char *argv[])
     //const size_t valididenttempl = vitempl.size();
     const size_t identtemplsizebytes = vitempl[0].size();
     std::cout << "\nIdentification templates" << std::endl
-              << "  Total:   " << validsubdirs*itpp + static_cast<size_t>(distractorfiles.size())
-              << "  (distractors: " << static_cast<size_t>(distractorfiles.size()) << ")" << std::endl
+              << "  Total:   " << validsubdirs*itpp + distractors
+              << "  (distractors: " << distractors << ")" << std::endl
               << "  Errors:  " << iterrors << std::endl
               << "  Avgtime: " << 1e-6 * itgentime << " ms" << std::endl
               << "  Size:    " << identtemplsizebytes << " bytes" << std::endl;
@@ -346,7 +354,7 @@ int main(int argc, char *argv[])
     QJsonObject _ijson;
     _ijson["Templates"]   = static_cast<int>(validsubdirs*itpp);
     _ijson["Perperson"]   = static_cast<int>(itpp);
-    _ijson["Distractors"] = distractorfiles.size();
+    _ijson["Distractors"] = static_cast<int>(distractors);
     _ijson["Errors"]      = static_cast<int>(iterrors);
     _ijson["Gentime_ms"]  = 1e-6 * itgentime;
     _ijson["Size_bytes"]  = static_cast<int>(identtemplsizebytes);

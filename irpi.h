@@ -179,8 +179,7 @@ typedef struct Candidate {
      * and the enrolled candidate.  Higher scores mean more likelihood that
      * the samples are of the same person.  An algorithm is free to assign
      * any value to a candidate.
-     * The distribution of values will have an impact on the appearance of a
-     * plot of false-negative and false-positive identification rates. */
+     */
     double similarityScore;
 
     Candidate() :
