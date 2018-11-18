@@ -1,4 +1,4 @@
-# Image recognition performance identiifcation
+# Image Recognition Performance Identification
 
 Здесь располагается API технологических испытаний простой идентификации для алгоритмов распознавания изображений различных биометрических модальностей
 
