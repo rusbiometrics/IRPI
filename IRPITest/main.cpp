@@ -187,6 +187,7 @@ int main(int argc, char *argv[])
         label++;
     }
 
+    const size_t enrolllabelmax = label - 1; // we will use this when cmc will be computed
     etgentime /= vetempl.size();
     const size_t enrolltemplsizebytes = vetempl[0].second.size();
     std::cout << "\nEnrollment templates" << std::endl
@@ -329,7 +330,7 @@ int main(int argc, char *argv[])
     std::cout << std::endl << "Results:" << std::endl
         << "  FAR: " << mFAR << std::endl
         << "  FRR: " << mFRR << std::endl;
-    std::vector<CMCPoint> vCMC = computeCMC(vcandidates,vtruelabel,validsubdirs);
+    std::vector<CMCPoint> vCMC = computeCMC(vcandidates,vtruelabel,enrolllabelmax);
     std::cout << "  TPIR1: " << vCMC[0].mTPIR << std::endl;
 
     QDateTime enddt = QDateTime::currentDateTime();
