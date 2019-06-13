@@ -169,7 +169,9 @@ typedef struct ReturnStatus {
  */
 typedef struct Candidate {
     /** @brief If the candidate is valid, this should be set to true. If
-     * the candidate computation failed, this should be set to false. */
+     * the candidate computation failed, this should be set to false.
+     * If value is set to false, similarityScore and label
+     * will be ignored entirely.*/
     bool isAssigned;
 
     /** @brief The template label from the enrollment set*/
@@ -318,7 +320,7 @@ public:
      * @param[out] decision
      * A best guess at whether there is a mate within the enrollment database.
      * If there was a mate found, this value should be set to true, Otherwise, false.
-     * Many such decisions allow a single point to be plotted alongside a ROC curve.
+     * Many such decisions allow a single point to be plotted alongside a DET curve.
      */
     virtual ReturnStatus
     identifyTemplate(

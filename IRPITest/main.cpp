@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
     // Default input values
     QDir indir, outdir;
     indir.setPath(""); outdir.setPath("");
-    size_t itpp = 1, etpp = 1, candidates = 64;
+    size_t itpp = 1, etpp = 1, candidates = 64, detpoints = 128;
     bool verbose = false, rewriteoutput = false, enabledistractors = false;
     std::string apiresourcespath;
     QImage::Format qimgtargetformat = QImage::Format_RGB888;
@@ -26,6 +26,7 @@ int main(int argc, char *argv[])
                   << "\t-e[int] - set how namy enrollment templates per person should be created (default: " << etpp << ")" << std::endl
                   << "\t-d      - enable search of distractors" << std::endl
                   << "\t-c[int] - number of the candidates to search (default: " << candidates << ")" << std::endl
+                  << "\t-p[int] - number of points to compute DET curve (default: " << detpoints << ")" << std::endl
                   << "\t-s      - be more verbose (print all measurements)" << std::endl
                   << "\t-w      - force output file to be rewritten if already existed" << std::endl;
         return 0;
@@ -59,6 +60,9 @@ int main(int argc, char *argv[])
                 break;           
             case 'c':
                 candidates = QString(++argv[0]).toUInt();
+                break;
+            case 'p':
+                detpoints = QString(++argv[0]).toUInt();
                 break;
             case 'd':
                 enabledistractors = true;
@@ -167,8 +171,8 @@ int main(int argc, char *argv[])
 
             for(size_t j = 0; j < etpp; ++j) {
                 if(verbose)
-                    std::cout << "   - enrollment template: " << _files.at(j) << std::endl;
-                irpiimg = readimage(_subdir.absoluteFilePath(_files.at(j)),qimgtargetformat,verbose);
+                    std::cout << "   - enrollment template: " << _files.at(static_cast<int>(j)) << std::endl;
+                irpiimg = readimage(_subdir.absoluteFilePath(_files.at(static_cast<int>(j))),qimgtargetformat,verbose);
                 std::vector<uint8_t> _templ;
                 elapsedtimer.start();
                 status = recognizer->createTemplate(irpiimg,IRPI::TemplateRole::Enrollment_1N,_templ);
@@ -187,7 +191,7 @@ int main(int argc, char *argv[])
         label++;
     }
 
-    const size_t enrolllabelmax = label - 1; // we will use this when cmc will be computed
+    const size_t enrolllabelmax = label - 1; // we will use this when CMC and DET will be computed
     etgentime /= vetempl.size();
     const size_t enrolltemplsizebytes = vetempl[0].second.size();
     std::cout << "\nEnrollment templates" << std::endl
@@ -244,8 +248,8 @@ int main(int argc, char *argv[])
 
             for(size_t j = etpp; j < minfilespp; ++j) {
                 if(verbose)
-                    std::cout << "   - identification template: " << _files.at(j) << std::endl;
-                irpiimg = readimage(_subdir.absoluteFilePath(_files.at(j)),qimgtargetformat,verbose);
+                    std::cout << "   - identification template: " << _files.at(static_cast<int>(j)) << std::endl;
+                irpiimg = readimage(_subdir.absoluteFilePath(_files.at(static_cast<int>(j))),qimgtargetformat,verbose);
                 std::vector<uint8_t> _templ;
                 elapsedtimer.start();
                 status = recognizer->createTemplate(irpiimg,IRPI::TemplateRole::Search_1N,_templ);
@@ -292,11 +296,11 @@ int main(int argc, char *argv[])
               << "  Total:   " << validsubdirs*itpp + distractors
               << "  (distractors: " << distractors << ")" << std::endl
               << "  Errors:  " << iterrors << std::endl
-              << "  Avgtime: " << 1e-6 * itgentime << " ms" << std::endl
+              << "  Avgtime: " << 1.e-6 * itgentime << " ms" << std::endl
               << "  Size:    " << identtemplsizebytes << " bytes" << std::endl;
 
     //----------------------------------------------------------------
-    std::cout << std::endl << "Stage 3 - identification search" << std::endl;
+    std::cout << std::endl << "Stage 4 - identification search" << std::endl;
     double searchtimens = 0;
     std::vector<std::vector<IRPI::Candidate>> vcandidates;
     vcandidates.reserve(vitempl.size());
@@ -330,8 +334,10 @@ int main(int argc, char *argv[])
     std::cout << std::endl << "Results:" << std::endl
         << "  FAR: " << mFAR << std::endl
         << "  FRR: " << mFRR << std::endl;
+    std::vector<DETPoint> vDET = computeDET(vcandidates,vtruelabel,enrolllabelmax,detpoints);
     std::vector<CMCPoint> vCMC = computeCMC(vcandidates,vtruelabel,enrolllabelmax);
-    std::cout << "  TPIR1: " << vCMC[0].mTPIR << std::endl;
+    if(vCMC.size() > 0)
+        std::cout << "  TPIR1: " << vCMC[0].mTPIR << std::endl;
 
     QDateTime enddt = QDateTime::currentDateTime();
     // Let's print time consumption
@@ -344,12 +350,13 @@ int main(int argc, char *argv[])
     jsonobj["StartDT"]    = startdt.toString("dd.MM.yyyy hh:mm:ss");
     jsonobj["EndDT"]      = enddt.toString("dd.MM.yyyy hh:mm:ss");
     jsonobj["CMC"]        = serializeCMC(vCMC);
+    jsonobj["DET"]        = serializeDET(vDET);
 
     QJsonObject _ejson;
     _ejson["Templates"]   = static_cast<int>(validsubdirs*etpp);
     _ejson["Perperson"]   = static_cast<int>(etpp);
     _ejson["Errors"]      = static_cast<int>(eterrors);
-    _ejson["Gentime_ms"]  = 1e-6 * etgentime;
+    _ejson["Gentime_ms"]  = 1.e-6 * etgentime;
     _ejson["Size_bytes"]  = static_cast<int>(enrolltemplsizebytes);
     jsonobj["Enrollment"] = _ejson;
     QJsonObject _ijson;
@@ -357,11 +364,11 @@ int main(int argc, char *argv[])
     _ijson["Perperson"]   = static_cast<int>(itpp);
     _ijson["Distractors"] = static_cast<int>(distractors);
     _ijson["Errors"]      = static_cast<int>(iterrors);
-    _ijson["Gentime_ms"]  = 1e-6 * itgentime;
+    _ijson["Gentime_ms"]  = 1.e-6 * itgentime;
     _ijson["Size_bytes"]  = static_cast<int>(identtemplsizebytes);
     jsonobj["Identification"] = _ijson;
 
-    jsonobj["Searchtime_us"] = searchtimens * 1e-3;
+    jsonobj["Searchtime_us"] = searchtimens * 1.e-3;
     jsonobj["Einittime_ms"]  = einittimems;
     jsonobj["Efinalizetime_ms"] = finalizetimems;
     jsonobj["Iinittime_ms"]  = iinittimems;
@@ -369,6 +376,6 @@ int main(int argc, char *argv[])
     jsonobj["FRR"]  = mFRR;
     outputfile.write(QJsonDocument(jsonobj).toJson());
     outputfile.close();
-    std::cout << " Data saved" << std::endl;
+    std::cout << " Done" << std::endl;
     return 0;
 }

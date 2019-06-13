@@ -5,6 +5,7 @@
 #include <cstring>
 #include <iostream>
 
+
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -104,8 +105,8 @@ void computeFARandFRR(const std::vector<std::vector<IRPI::Candidate>> &_vcandida
                 _tn++;
         }
     }
-    _far = static_cast<double>(_fp) / (_fp + _tp + 1.e-6);
-    _frr = static_cast<double>(_fn) / (_tn + _fn + 1.e-6);
+    _far = static_cast<double>(_fp) / (_fp + _tp + 1.e-10);
+    _frr = static_cast<double>(_fn) / (_tn + _fn + 1.e-10);
 }
 //--------------------------------------------------
 
@@ -118,36 +119,33 @@ struct CMCPoint
 
 std::vector<CMCPoint> computeCMC(const std::vector<std::vector<IRPI::Candidate>> &_vcandidates, const std::vector<size_t> &_vtruelabels, const size_t _enrolllabelmax)
 {
-    // We need to count only assigned elements
-    size_t length = 0;
-    const std::vector<IRPI::Candidate> &_candidates = _vcandidates[0];
-    for(size_t &i = length; i < _candidates.size(); ++i) {
-        if(_candidates[i].isAssigned == false)
-            break;
-    }
+    if(_vcandidates.size() == 0)
+        return std::vector<CMCPoint>();
+    // How many ranks can be computed
+    size_t ranks = _vcandidates[0].size();
     // Let's count frequencies for ranks
-    std::vector<size_t> _vrankfrequency(length,0);
+    std::vector<size_t> _vrankfrequency(ranks,0);
     size_t _instances = 0;
     for(size_t i = 0; i < _vcandidates.size(); ++i) {
-        if(_vtruelabels[i] <= _enrolllabelmax) { // need to count only instances with mates
+        if(_vtruelabels[i] <= _enrolllabelmax) { // as we need to count only instances with mates
             _instances++;
             const std::vector<IRPI::Candidate> &_candidates = _vcandidates[i];
-            for(size_t j = 0; j < length; ++j) {
-                if(_candidates[j].label == _vtruelabels[i]) {
+            for(size_t j = 0; j < ranks; ++j) {
+                if(_candidates[j].isAssigned && (_candidates[j].label == _vtruelabels[i])) {
                     _vrankfrequency[j]++;
                     break;
                 }
             }
         }
     }
-    // We are ready to save points
-    std::vector<CMCPoint> _vCMC(length,CMCPoint());
-    for(size_t i = 0; i < length; ++i) {
+    // We are ready to compute curve points
+    std::vector<CMCPoint> _vCMC(ranks,CMCPoint());
+    for(size_t i = 0; i < ranks; ++i) {
         _vCMC[i].rank = i + 1;
         for(size_t j = 0; j < _vCMC[i].rank; ++j) {
             _vCMC[i].mTPIR += _vrankfrequency[j];
         }
-        _vCMC[i].mTPIR /= _instances + 1e-6; // add epsilon here to prevent nan when _instances == 0
+        _vCMC[i].mTPIR /= _instances + 1.e-10; // add epsilon here to prevent nan when _instances == 0
     }
     return _vCMC;
 }
@@ -163,6 +161,73 @@ QJsonArray serializeCMC(const std::vector<CMCPoint> &_cmc)
     }
     return _jsonarr;
 }
+
+//--------------------------------------------------
+struct DETPoint
+{
+    DETPoint() : mFNIR(0), mFPIR(0) {}
+    double mFNIR, mFPIR;
+};
+
+
+QJsonArray serializeDET(const std::vector<DETPoint> &_det)
+{
+    QJsonArray _jsonarr;
+    for(size_t i = 0; i < _det.size(); ++i) {
+        QJsonObject _jsonobj;
+        _jsonobj["FPIR"] = _det[i].mFPIR;
+        _jsonobj["FNIR"] = _det[i].mFNIR;
+        _jsonarr.push_back(qMove(_jsonobj));
+    }
+    return _jsonarr;
+}
+
+std::vector<DETPoint> computeDET(const std::vector<std::vector<IRPI::Candidate>> &_vcandidates, const std::vector<size_t> &_vtruelabels, const size_t _enrolllabelmax, const size_t _points)
+{
+    if(_vcandidates.size() == 0 || _points == 0)
+        return std::vector<DETPoint>();
+    // First we need to find min and max similarity scores
+    double _maxsimilarity = std::numeric_limits<double>::min(), _minsimilarity = std::numeric_limits<double>::max();
+    for(size_t i = 0; i < _vcandidates.size(); ++i) {
+        if(_vcandidates[i].size() > 0) {
+            // We know that most similar candidates should go first
+            if(_vcandidates[i][0].isAssigned && (_maxsimilarity < _vcandidates[i][0].similarityScore))
+                _maxsimilarity = _vcandidates[i][0].similarityScore;
+            for(size_t j = 1; j < _vcandidates[i].size(); ++j) {
+                if(_vcandidates[i][j].isAssigned && (_minsimilarity > _vcandidates[i][j].similarityScore))
+                    _minsimilarity = _vcandidates[i][j].similarityScore;
+            }
+        }
+    }
+    _minsimilarity *= 0.99;
+    _maxsimilarity *= 1.01;
+    const double _similaritystep = (_maxsimilarity - _minsimilarity) / _points;
+    std::vector<DETPoint> _curve(_points,DETPoint());
+    // Let's compute FPIR and FNIR1 for every similarity step
+    #pragma omp parallel for
+    for(int i = 0; i < static_cast<int>(_points); ++i) { // openmp demands signed integral type to be used
+        const double _threshold = _minsimilarity + i*_similaritystep;
+        size_t _nonmate_searches = 0, _mate_searches = 0, _similar_nonmate = 0, _unsimilar_mate = 0;
+        for(size_t k = 0; k < _vcandidates.size(); ++k) {
+            if(_vcandidates[k].size() > 0) {
+                if(_vtruelabels[k] <= _enrolllabelmax) { // should have mate in enrollment set, goes to FNIR
+                    _mate_searches++;
+                    if(_vcandidates[k][0].isAssigned && (_vcandidates[k][0].similarityScore < _threshold))
+                        _unsimilar_mate++;
+                } else { // no mate, goes to FPIR
+                    _nonmate_searches++;
+                    if(_vcandidates[k][0].isAssigned && (_vcandidates[k][0].similarityScore >= _threshold))
+                        _similar_nonmate++;
+                }
+            }
+        }
+        _curve[i].mFNIR = static_cast<double>(_unsimilar_mate) / (_mate_searches + 1.e-10);
+        _curve[i].mFPIR = static_cast<double>(_similar_nonmate) / (_nonmate_searches + 1.e-10);
+    }
+    return _curve;
+}
+
+
 
 //--------------------------------------------------
 void showTimeConsumption(qint64 secondstotal)
