@@ -24,7 +24,7 @@ win32 {
     win32-msvc2015: COMPILER = vc14
     win32-msvc2017: COMPILER = vc16
     win32-g++:      COMPILER = mingw
-    win32:contains(QMAKE_TARGET.arch, x86_64){
+    win32:contains(QMAKE_TARGET.arch, x86_64) {
         ARCH = x64
     } else {
         ARCH = x86
@@ -40,5 +40,3 @@ win32 {
 
 # ============
 DEFINES += VENDOR_API_NAME=\\\"$${API_NAME}\\\" # Do not modify
-
-

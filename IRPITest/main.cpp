@@ -11,7 +11,7 @@ int main(int argc, char *argv[])
     QDir indir, outdir;
     indir.setPath(""); outdir.setPath("");
     size_t itpp = 1, etpp = 1, candidates = 64, detpoints = 128;
-    bool verbose = false, rewriteoutput = false, enabledistractors = false;
+    bool verbose = false, rewriteoutput = false, enabledistractors = false, shuffletemplates = false;
     std::string apiresourcespath;
     QImage::Format qimgtargetformat = QImage::Format_RGB888;
     // If no args passed, show help
@@ -27,7 +27,8 @@ int main(int argc, char *argv[])
                   << "\t-d      - enable search of distractors" << std::endl
                   << "\t-c[int] - number of the candidates to search (default: " << candidates << ")" << std::endl
                   << "\t-p[int] - number of points to compute DET curve (default: " << detpoints << ")" << std::endl
-                  << "\t-s      - be more verbose (print all measurements)" << std::endl
+                  << "\t-b      - be more verbose (print all measurements)" << std::endl
+                  << "\t-s      - shuffle templates before identification" << std::endl
                   << "\t-w      - force output file to be rewritten if already existed" << std::endl;
         return 0;
     }
@@ -40,8 +41,11 @@ int main(int argc, char *argv[])
             case 'w':
                 rewriteoutput = true;
                 break;
-            case 's':
+            case 'b':
                 verbose = true;
+                break;
+            case 's':
+                shuffletemplates = true;
                 break;
             case 'i':
                 indir.setPath(++argv[0]);
@@ -93,6 +97,11 @@ int main(int argc, char *argv[])
         std::cerr << "Number of candidates should be greater that zero! Abort...";
         return 5;
     }
+    //Let's check det points number
+    if(detpoints < 1) {
+        std::cerr << "Number of DET points should be greater that zero! Abort...";
+        return 6;
+    }
     // Ok we can go forward
     std::cout << "Input dir:\t" << indir.absolutePath().toStdString() << std::endl;
     std::cout << "Output dir:\t" << outdir.absolutePath().toStdString() << std::endl;
@@ -114,7 +123,7 @@ int main(int argc, char *argv[])
     std::cout << "  Valid subdirs: " << validsubdirs << std::endl;
     if(validsubdirs*etpp == 0) {
         std::cerr << std::endl << "There is 0 enrollment templates! Test could not be performed! Abort..." << std::endl;
-        return 6;
+        return 7;
     }
 
     QStringList distractorfiles;
@@ -125,16 +134,16 @@ int main(int argc, char *argv[])
     std::cout << "  Distractor files: " << distractors << std::endl;
     if((validsubdirs*itpp + distractors) == 0) {
         std::cerr << std::endl << "There is 0 identification templates! Test could not be performed! Abort..." << std::endl;
-        return 7;
+        return 8;
     }
     // We need also check if output file already exists
     QFile outputfile(outdir.absolutePath().append("/%1.json").arg(VENDOR_API_NAME));
     if(outputfile.exists() && (rewriteoutput == false)) {
         std::cerr << "Output file already exists in the target location! Abort...";
-        return 8;
+        return 9;
     } else if(outputfile.open(QFile::WriteOnly) == false) {
         std::cerr << "Can not open output file for write! Abort...";
-        return 9;
+        return 10;
     }
 
     //----------------------------------------------------------------
@@ -150,7 +159,7 @@ int main(int argc, char *argv[])
     if(status.code != IRPI::ReturnCode::Success) {
         std::cout << "Vendor's error description: " << status.info << std::endl
                   << "Can not initialize Vendor's API! Abort..." << std::endl;
-        return 10;
+        return 11;
     }
 
     std::cout << std::endl << "Starting templates generation..." << std::endl;
@@ -209,7 +218,7 @@ int main(int argc, char *argv[])
     if(status.code != IRPI::ReturnCode::Success) {
         std::cout << "Vendor's error description: " << status.info << std::endl
                   << "Can not finalize enrollment! Abort..." << std::endl;
-        return 11;
+        return 12;
     }
     // As we need not enroll templates any longer, let's release memory occupied by them
     vetempl.clear(); vetempl.shrink_to_fit();
@@ -225,7 +234,7 @@ int main(int argc, char *argv[])
     if(status.code != IRPI::ReturnCode::Success) {
         std::cout << "Vendor's error description: " << status.info << std::endl
                   << "Can not initialize Vendor's API! Abort..." << std::endl;
-        return 12;
+        return 13;
     }
 
     std::cout << std::endl << "Starting templates generation..." << std::endl;
@@ -299,7 +308,13 @@ int main(int argc, char *argv[])
               << "  Avgtime: " << 1.e-6 * itgentime << " ms" << std::endl
               << "  Size:    " << identtemplsizebytes << " bytes" << std::endl;
 
-    //----------------------------------------------------------------
+    // Optional shuffle identification templates
+    if(shuffletemplates) {
+        std::srand ( unsigned ( std::time(0) ) );
+        std::cout << std::endl << "Shuffling templates" << std::endl;
+        random_shuffle(vtruelabel.begin(),vtruelabel.end(),vitempl.begin(),vitempl.end());
+    }
+
     std::cout << std::endl << "Stage 4 - identification search" << std::endl;
     double searchtimens = 0;
     std::vector<std::vector<IRPI::Candidate>> vcandidates;
@@ -308,7 +323,7 @@ int main(int argc, char *argv[])
     vdecisions.reserve(vitempl.size());
     bool decision;
     for(size_t i = 0; i < vitempl.size(); ++i) {
-        std::cout << std::endl << "  for label " << vtruelabel[i] << std::endl;
+        std::cout << "  Identification for label: " << vtruelabel[i] << std::endl;
         std::vector<IRPI::Candidate> vprediction;
         decision = false;
         elapsedtimer.start();
@@ -326,18 +341,42 @@ int main(int argc, char *argv[])
     }
 
     searchtimens /= vitempl.size();
+    std::cout << std::endl << "  Total identifications: " << vitempl.size() << std::endl;
+    std::cout << "  Avg identification time: " << searchtimens*1e-3 << " us" << std::endl;
     // As we need not ident templates any longer, let's release memory occupied by them
-    vitempl.clear(); vitempl.shrink_to_fit();
+    vitempl.clear(); vitempl.shrink_to_fit();       
 
-    double mFAR, mFRR;
+    std::cout << std::endl << "Stage 5 - CMC and DET computation" << std::endl << std::endl;
+    const uint confexaples = 10; // how many exaples are needed to count result confident
+    /*double mFAR, mFRR;
     computeFARandFRR(vcandidates,vdecisions,vtruelabel,mFAR,mFRR);
     std::cout << std::endl << "Results:" << std::endl
         << "  FAR: " << mFAR << std::endl
-        << "  FRR: " << mFRR << std::endl;
-    std::vector<DETPoint> vDET = computeDET(vcandidates,vtruelabel,enrolllabelmax,detpoints);
+        << "  FRR: " << mFRR << std::endl;*/
+
     std::vector<CMCPoint> vCMC = computeCMC(vcandidates,vtruelabel,enrolllabelmax);
     if(vCMC.size() > 0)
-        std::cout << "  TPIR1: " << vCMC[0].mTPIR << std::endl;
+        std::cout << "  Best TPIR[1]: " << vCMC[0].mTPIR << std::endl;
+
+    double bestFPIR = 1, bestFNIR = 1;
+    std::vector<DETPoint> vDET;
+    if(distractors > 0) {
+        bestFPIR = static_cast<double>(confexaples)/(distractors * etpp);
+        vDET = computeDET(vcandidates,vtruelabel,enrolllabelmax,detpoints);
+        bestFNIR = findFNIR(vDET,bestFPIR);
+        if(bestFNIR < static_cast<double>(confexaples)/(validsubdirs * itpp * etpp)) {
+            if(static_cast<double>(confexaples)/(validsubdirs * itpp * etpp) < 1.0)
+                bestFNIR = static_cast<double>(confexaples)/(validsubdirs * itpp * etpp);
+            else
+                bestFNIR = 1.0;
+        }
+        std::cout << "  Best FNIR (FPIR): "
+                  << QString::number(bestFNIR,'f',std::round(std::log10(static_cast<double>(validsubdirs * itpp * etpp)/confexaples))).toStdString()
+                  << " ("
+                  << QString::number(bestFPIR,'f',std::round(std::log10(static_cast<double>(distractors * etpp)/confexaples))).toStdString()
+                  << ")" << std::endl;
+    }
+
 
     QDateTime enddt = QDateTime::currentDateTime();
     // Let's print time consumption
@@ -350,7 +389,8 @@ int main(int argc, char *argv[])
     jsonobj["StartDT"]    = startdt.toString("dd.MM.yyyy hh:mm:ss");
     jsonobj["EndDT"]      = enddt.toString("dd.MM.yyyy hh:mm:ss");
     jsonobj["CMC"]        = serializeCMC(vCMC);
-    jsonobj["DET"]        = serializeDET(vDET);
+    if(distractors > 0)
+        jsonobj["DET"]    = serializeDET(vDET);
 
     QJsonObject _ejson;
     _ejson["Templates"]   = static_cast<int>(validsubdirs*etpp);
@@ -372,8 +412,10 @@ int main(int argc, char *argv[])
     jsonobj["Einittime_ms"]  = einittimems;
     jsonobj["Efinalizetime_ms"] = finalizetimems;
     jsonobj["Iinittime_ms"]  = iinittimems;
-    jsonobj["FAR"]  = mFAR;
-    jsonobj["FRR"]  = mFRR;
+    /*jsonobj["FAR"]  = mFAR;
+    jsonobj["FRR"]  = mFRR;*/
+    jsonobj["FNIR"] = bestFNIR;
+    jsonobj["FPIR"] = bestFPIR;
     outputfile.write(QJsonDocument(jsonobj).toJson());
     outputfile.close();
     std::cout << " Done" << std::endl;

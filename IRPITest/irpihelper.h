@@ -4,7 +4,8 @@
 #include <cmath>
 #include <cstring>
 #include <iostream>
-
+#include <ctime>
+#include <cstdlib>
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -212,7 +213,8 @@ std::vector<DETPoint> computeDET(const std::vector<std::vector<IRPI::Candidate>>
             if(_vcandidates[k].size() > 0) {
                 if(_vtruelabels[k] <= _enrolllabelmax) { // should have mate in enrollment set, goes to FNIR
                     _mate_searches++;
-                    if(_vcandidates[k][0].isAssigned && (_vcandidates[k][0].similarityScore < _threshold))
+                    if(_vcandidates[k][0].isAssigned && (_vcandidates[k][0].label == _vtruelabels[k]) &&
+                                                        (_vcandidates[k][0].similarityScore < _threshold))
                         _unsimilar_mate++;
                 } else { // no mate, goes to FPIR
                     _nonmate_searches++;
@@ -241,6 +243,30 @@ void showTimeConsumption(qint64 secondstotal)
               << hours << " hours "
               << minutes << " minutes and "
               << seconds << " seconds" << std::endl;
+}
+
+//--------------------------------------------------
+double findFNIR(const std::vector<DETPoint> &_vdet, const double _fpir)
+{
+    for(size_t i = (_vdet.size() - 1); i >= 1; --i) {
+        if(_vdet[i].mFPIR > _fpir)
+            return _vdet[i].mFNIR;
+    }
+    return _vdet[0].mFNIR;
+}
+
+
+//--------------------------------------------------
+template <typename RandomIt1, typename RandomIt2>
+void random_shuffle (RandomIt1 v1first, RandomIt1 v1last, RandomIt2 v2first, RandomIt2 v2last)
+{
+    size_t n = std::min(v1last - v1first,v2last - v2first);
+    size_t pos;
+    for(size_t i = 0; i < n; i++) {
+        pos = std::rand() % n;
+        std::swap(v1first[i],v1first[pos]);
+        std::swap(v2first[i],v2first[pos]);
+    }
 }
 
 #endif // IRPIHELPER_H
