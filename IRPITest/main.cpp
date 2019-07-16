@@ -92,14 +92,14 @@ int main(int argc, char *argv[])
             return 4;
         }
     }
-    //Let's check candidates number
+    // Let's check candidates number
     if(candidates < 1) {
-        std::cerr << "Number of candidates should be greater that zero! Abort...";
+        std::cerr << "Number of candidates should be greater than zero! Abort...";
         return 5;
     }
-    //Let's check det points number
+    // Let's check det points number
     if(detpoints < 1) {
-        std::cerr << "Number of DET points should be greater that zero! Abort...";
+        std::cerr << "Number of DET points should be greater than zero! Abort...";
         return 6;
     }
     // Ok we can go forward
@@ -348,11 +348,6 @@ int main(int argc, char *argv[])
 
     std::cout << std::endl << "Stage 5 - CMC and DET computation" << std::endl << std::endl;
     const uint confexaples = 10; // how many exaples are needed to count result confident
-    /*double mFAR, mFRR;
-    computeFARandFRR(vcandidates,vdecisions,vtruelabel,mFAR,mFRR);
-    std::cout << std::endl << "Results:" << std::endl
-        << "  FAR: " << mFAR << std::endl
-        << "  FRR: " << mFRR << std::endl;*/
 
     std::vector<CMCPoint> vCMC = computeCMC(vcandidates,vtruelabel,enrolllabelmax);
     if(vCMC.size() > 0)
@@ -362,6 +357,8 @@ int main(int argc, char *argv[])
     std::vector<DETPoint> vDET;
     if(distractors > 0) {
         bestFPIR = static_cast<double>(confexaples)/(distractors * etpp);
+        if(bestFPIR > 1.0)
+            bestFPIR = 1.0;
         vDET = computeDET(vcandidates,vtruelabel,enrolllabelmax,detpoints);
         bestFNIR = findFNIR(vDET,bestFPIR);
         if(bestFNIR < static_cast<double>(confexaples)/(validsubdirs * itpp * etpp)) {
@@ -371,9 +368,9 @@ int main(int argc, char *argv[])
                 bestFNIR = 1.0;
         }
         std::cout << "  Best FNIR (FPIR): "
-                  << QString::number(bestFNIR,'f',std::round(std::log10(static_cast<double>(validsubdirs * itpp * etpp)/confexaples))).toStdString()
+                  << QString::number(bestFNIR,'f',std::round(std::log10(1.0 + static_cast<double>(validsubdirs * itpp * etpp)/confexaples))).toStdString()
                   << " ("
-                  << QString::number(bestFPIR,'f',std::round(std::log10(static_cast<double>(distractors * etpp)/confexaples))).toStdString()
+                  << QString::number(bestFPIR,'f',std::round(std::log10(1.0 + static_cast<double>(distractors * etpp)/confexaples))).toStdString()
                   << ")" << std::endl;
     }
 
@@ -412,8 +409,6 @@ int main(int argc, char *argv[])
     jsonobj["Einittime_ms"]  = einittimems;
     jsonobj["Efinalizetime_ms"] = finalizetimems;
     jsonobj["Iinittime_ms"]  = iinittimems;
-    /*jsonobj["FAR"]  = mFAR;
-    jsonobj["FRR"]  = mFRR;*/
     jsonobj["FNIR"] = bestFNIR;
     jsonobj["FPIR"] = bestFPIR;
     outputfile.write(QJsonDocument(jsonobj).toJson());

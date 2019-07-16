@@ -36,6 +36,9 @@ win32 {
 
     # Specify libraries that should be linked
     LIBS += -l$${API_NAME}
+
+    #include($${PWD}/../../Sources/API_samples/irpi_Face/$${API_NAME}/opencv.pri)
+    #include($${PWD}/../../Sources/API_samples/irpi_Face/$${API_NAME}/dlib.pri)
 }
 
 # ============
