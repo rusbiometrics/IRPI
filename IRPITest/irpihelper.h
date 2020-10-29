@@ -201,8 +201,8 @@ std::vector<DETPoint> computeDET(const std::vector<std::vector<IRPI::Candidate>>
             }
         }
     }
-    _minsimilarity *= 0.99;
-    _maxsimilarity *= 1.01;
+    _minsimilarity *= 0.9999;
+    _maxsimilarity *= 1.0001;
     const double _similaritystep = (_maxsimilarity - _minsimilarity) / _points;
     std::vector<DETPoint> _curve(_points,DETPoint());
     // Let's compute FPIR and FNIR1 for every similarity step
