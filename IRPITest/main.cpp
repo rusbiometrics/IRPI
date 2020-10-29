@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
     // Default input values
     QDir indir, outdir;
     indir.setPath(""); outdir.setPath("");
-    size_t itpp = 1, etpp = 1, candidates = 64, detpoints = 128;
+    size_t itpp = 1, etpp = 1, candidates = 64, detpoints = 10000;
     bool verbose = false, rewriteoutput = false, enabledistractors = false, shuffletemplates = false;
     std::string apiresourcespath;
     QImage::Format qimgtargetformat = QImage::Format_RGB888;
@@ -395,6 +395,7 @@ int main(int argc, char *argv[])
     _ejson["Errors"]      = static_cast<int>(eterrors);
     _ejson["Gentime_ms"]  = 1.e-6 * etgentime;
     _ejson["Size_bytes"]  = static_cast<int>(enrolltemplsizebytes);
+    _ejson["Rejection_rate"] = std::max(static_cast<double>(eterrors) / static_cast<double>(validsubdirs*etpp), 3.0 / static_cast<double>(validsubdirs*etpp));
     jsonobj["Enrollment"] = _ejson;
     QJsonObject _ijson;
     _ijson["Templates"]   = static_cast<int>(validsubdirs*itpp);
@@ -403,6 +404,7 @@ int main(int argc, char *argv[])
     _ijson["Errors"]      = static_cast<int>(iterrors);
     _ijson["Gentime_ms"]  = 1.e-6 * itgentime;
     _ijson["Size_bytes"]  = static_cast<int>(identtemplsizebytes);
+    _ijson["Rejection_rate"] = std::max(static_cast<double>(iterrors) / static_cast<double>(validsubdirs*itpp), 3.0 / static_cast<double>(validsubdirs*itpp));
     jsonobj["Identification"] = _ijson;
 
     jsonobj["Searchtime_us"] = searchtimens * 1.e-3;

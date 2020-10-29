@@ -166,8 +166,8 @@ QJsonArray serializeCMC(const std::vector<CMCPoint> &_cmc)
 //--------------------------------------------------
 struct DETPoint
 {
-    DETPoint() : mFNIR(0), mFPIR(0) {}
-    double mFNIR, mFPIR;
+    DETPoint() : mFNIR(0), mFPIR(0), similarity(0) {}
+    double mFNIR, mFPIR, similarity;
 };
 
 
@@ -176,6 +176,7 @@ QJsonArray serializeDET(const std::vector<DETPoint> &_det)
     QJsonArray _jsonarr;
     for(size_t i = 0; i < _det.size(); ++i) {
         QJsonObject _jsonobj;
+        _jsonobj["similarity"] = _det[i].similarity;
         _jsonobj["FPIR"] = _det[i].mFPIR;
         _jsonobj["FNIR"] = _det[i].mFNIR;
         _jsonarr.push_back(qMove(_jsonobj));
@@ -223,8 +224,9 @@ std::vector<DETPoint> computeDET(const std::vector<std::vector<IRPI::Candidate>>
                 }
             }
         }
-        _curve[i].mFNIR = static_cast<double>(_unsimilar_mate) / (_mate_searches + 1.e-10);
-        _curve[i].mFPIR = static_cast<double>(_similar_nonmate) / (_nonmate_searches + 1.e-10);
+        _curve[i].similarity = _threshold;
+        _curve[i].mFNIR = std::max(static_cast<double>(_unsimilar_mate) / (_mate_searches + 1.e-10), 3.0 / (_mate_searches + 1.e-10));
+        _curve[i].mFPIR = std::max(static_cast<double>(_similar_nonmate) / (_nonmate_searches + 1.e-10), 3.0 / (_nonmate_searches + 1.e-10));
     }
     return _curve;
 }
