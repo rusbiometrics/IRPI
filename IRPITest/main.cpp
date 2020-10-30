@@ -347,30 +347,24 @@ int main(int argc, char *argv[])
     vitempl.clear(); vitempl.shrink_to_fit();       
 
     std::cout << std::endl << "Stage 5 - CMC and DET computation" << std::endl << std::endl;
-    const uint confexaples = 10; // how many exaples are needed to count result confident
+    const uint confexaples = 3; // how many exaples are needed to count result confident
 
     std::vector<CMCPoint> vCMC = computeCMC(vcandidates,vtruelabel,enrolllabelmax);
     if(vCMC.size() > 0)
-        std::cout << "  Best TPIR[1]: " << vCMC[0].mTPIR << std::endl;
+        std::cout << "  Best TPIR[1]: "
+                  << QString::number(vCMC[0].mTPIR,'f',-std::ceil(std::log10(static_cast<double>(confexaples)/(validsubdirs * itpp * etpp)))).toStdString()
+                  << std::endl;
 
-    double bestFPIR = 1, bestFNIR = 1;
+    double bestFPIR = 1.0, bestFNIR = 1.0;
     std::vector<DETPoint> vDET;
     if(distractors > 0) {
-        bestFPIR = static_cast<double>(confexaples)/(distractors * etpp);
-        if(bestFPIR > 1.0)
-            bestFPIR = 1.0;
-        vDET = computeDET(vcandidates,vtruelabel,enrolllabelmax,detpoints);
+        vDET = computeDET(vcandidates,vtruelabel,enrolllabelmax,detpoints,confexaples);
+        bestFPIR = std::exp(std::log(10.0)*std::ceil(std::log10(static_cast<double>(confexaples)/(distractors * etpp))));
         bestFNIR = findFNIR(vDET,bestFPIR);
-        if(bestFNIR < static_cast<double>(confexaples)/(validsubdirs * itpp * etpp)) {
-            if(static_cast<double>(confexaples)/(validsubdirs * itpp * etpp) < 1.0)
-                bestFNIR = static_cast<double>(confexaples)/(validsubdirs * itpp * etpp);
-            else
-                bestFNIR = 1.0;
-        }
         std::cout << "  Best FNIR (FPIR): "
-                  << QString::number(bestFNIR,'f',std::round(std::log10(1.0 + static_cast<double>(validsubdirs * itpp * etpp)/confexaples))).toStdString()
+                  << QString::number(bestFNIR,'f',-std::ceil(std::log10(static_cast<double>(confexaples)/(validsubdirs * itpp * etpp)))).toStdString()
                   << " ("
-                  << QString::number(bestFPIR,'f',std::round(std::log10(1.0 + static_cast<double>(distractors * etpp)/confexaples))).toStdString()
+                  << QString::number(bestFPIR,'f',-std::ceil(std::log10(static_cast<double>(confexaples)/(distractors * etpp)))).toStdString()
                   << ")" << std::endl;
     }
 
@@ -395,7 +389,8 @@ int main(int argc, char *argv[])
     _ejson["Errors"]      = static_cast<int>(eterrors);
     _ejson["Gentime_ms"]  = 1.e-6 * etgentime;
     _ejson["Size_bytes"]  = static_cast<int>(enrolltemplsizebytes);
-    _ejson["Rejection_rate"] = std::max(static_cast<double>(eterrors) / static_cast<double>(validsubdirs*etpp), 3.0 / static_cast<double>(validsubdirs*etpp));
+    _ejson["Rejection_rate"] = std::max(eterrors / static_cast<double>(validsubdirs*etpp),
+                                        confexaples / static_cast<double>(validsubdirs*etpp));
     jsonobj["Enrollment"] = _ejson;
     QJsonObject _ijson;
     _ijson["Templates"]   = static_cast<int>(validsubdirs*itpp);
@@ -404,7 +399,8 @@ int main(int argc, char *argv[])
     _ijson["Errors"]      = static_cast<int>(iterrors);
     _ijson["Gentime_ms"]  = 1.e-6 * itgentime;
     _ijson["Size_bytes"]  = static_cast<int>(identtemplsizebytes);
-    _ijson["Rejection_rate"] = std::max(static_cast<double>(iterrors) / static_cast<double>(validsubdirs*itpp), 3.0 / static_cast<double>(validsubdirs*itpp));
+    _ijson["Rejection_rate"] = std::max(iterrors / static_cast<double>(validsubdirs*itpp),
+                                        confexaples / static_cast<double>(validsubdirs*itpp));
     jsonobj["Identification"] = _ijson;
 
     jsonobj["Searchtime_us"] = searchtimens * 1.e-3;

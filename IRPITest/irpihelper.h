@@ -88,7 +88,7 @@ IRPI::Image readimage(const QString &_filename, QImage::Format _mTARgetformat=QI
 }
 
 //---------------------------------------------------
-void computeFARandFRR(const std::vector<std::vector<IRPI::Candidate>> &_vcandidates, const std::vector<bool> &_vdecisions, const std::vector<size_t> &_vtruelabel, double &_far, double &_frr)
+/*void computeFARandFRR(const std::vector<std::vector<IRPI::Candidate>> &_vcandidates, const std::vector<bool> &_vdecisions, const std::vector<size_t> &_vtruelabel, double &_far, double &_frr)
 {
     size_t _tp = 0, _tn = 0, _fn = 0, _fp = 0;
     for(size_t i = 0; i < _vcandidates.size(); ++i) {
@@ -108,7 +108,7 @@ void computeFARandFRR(const std::vector<std::vector<IRPI::Candidate>> &_vcandida
     }
     _far = static_cast<double>(_fp) / (_fp + _tp + 1.e-10);
     _frr = static_cast<double>(_fn) / (_tn + _fn + 1.e-10);
-}
+}*/
 //--------------------------------------------------
 
 struct CMCPoint
@@ -184,7 +184,7 @@ QJsonArray serializeDET(const std::vector<DETPoint> &_det)
     return _jsonarr;
 }
 
-std::vector<DETPoint> computeDET(const std::vector<std::vector<IRPI::Candidate>> &_vcandidates, const std::vector<size_t> &_vtruelabels, const size_t _enrolllabelmax, const size_t _points)
+std::vector<DETPoint> computeDET(const std::vector<std::vector<IRPI::Candidate>> &_vcandidates, const std::vector<size_t> &_vtruelabels, const size_t _enrolllabelmax, const size_t _points, const uint _confexamples)
 {
     if(_vcandidates.size() == 0 || _points == 0)
         return std::vector<DETPoint>();
@@ -201,8 +201,6 @@ std::vector<DETPoint> computeDET(const std::vector<std::vector<IRPI::Candidate>>
             }
         }
     }
-    _minsimilarity *= 0.9999;
-    _maxsimilarity *= 1.0001;
     const double _similaritystep = (_maxsimilarity - _minsimilarity) / _points;
     std::vector<DETPoint> _curve(_points,DETPoint());
     // Let's compute FPIR and FNIR1 for every similarity step
@@ -217,7 +215,7 @@ std::vector<DETPoint> computeDET(const std::vector<std::vector<IRPI::Candidate>>
                     if(_vcandidates[k][0].isAssigned && (_vcandidates[k][0].label == _vtruelabels[k]) &&
                                                         (_vcandidates[k][0].similarityScore < _threshold))
                         _unsimilar_mate++;
-                } else { // no mate, goes to FPIR
+                } else { // no mate in enrollment set, goes to FPIR
                     _nonmate_searches++;
                     if(_vcandidates[k][0].isAssigned && (_vcandidates[k][0].similarityScore >= _threshold))
                         _similar_nonmate++;
@@ -225,8 +223,10 @@ std::vector<DETPoint> computeDET(const std::vector<std::vector<IRPI::Candidate>>
             }
         }
         _curve[i].similarity = _threshold;
-        _curve[i].mFNIR = std::max(static_cast<double>(_unsimilar_mate) / (_mate_searches + 1.e-10), 3.0 / (_mate_searches + 1.e-10));
-        _curve[i].mFPIR = std::max(static_cast<double>(_similar_nonmate) / (_nonmate_searches + 1.e-10), 3.0 / (_nonmate_searches + 1.e-10));
+        _curve[i].mFNIR = std::max(static_cast<double>(_unsimilar_mate) / (_mate_searches + 1.e-10),
+                                   static_cast<double>(_confexamples) / (_mate_searches + 1.e-10));
+        _curve[i].mFPIR = std::max(static_cast<double>(_similar_nonmate) / (_nonmate_searches + 1.e-10),
+                                   static_cast<double>(_confexamples) / (_nonmate_searches + 1.e-10));
     }
     return _curve;
 }
@@ -250,11 +250,10 @@ void showTimeConsumption(qint64 secondstotal)
 //--------------------------------------------------
 double findFNIR(const std::vector<DETPoint> &_vdet, const double _fpir)
 {
-    for(size_t i = (_vdet.size() - 1); i >= 1; --i) {
-        if(_vdet[i].mFPIR > _fpir)
+    for(size_t i = 0; i < _vdet.size() - 1; ++i)
+        if((_vdet[i].mFPIR - _fpir)*(_vdet[i+1].mFPIR - _fpir) < 0)
             return _vdet[i].mFNIR;
-    }
-    return _vdet[0].mFNIR;
+    return 1.0;
 }
 
 
