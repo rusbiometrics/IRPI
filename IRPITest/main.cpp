@@ -12,6 +12,7 @@ int main(int argc, char *argv[])
     indir.setPath(""); outdir.setPath("");
     size_t itpp = 1, etpp = 1, candidates = 64, detpoints = 10000;
     bool verbose = false, rewriteoutput = false, enabledistractors = false, shuffletemplates = false;
+    uint confexamples = 3;
     std::string apiresourcespath;
     QImage::Format qimgtargetformat = QImage::Format_RGB888;
     // If no args passed, show help
@@ -27,6 +28,7 @@ int main(int argc, char *argv[])
                   << "\t-d      - enable search of distractors" << std::endl
                   << "\t-c[int] - number of the candidates to search (default: " << candidates << ")" << std::endl
                   << "\t-p[int] - number of points to compute DET curve (default: " << detpoints << ")" << std::endl
+                  << "\t-f[int] - number of exmples to count result confident (default: " << confexamples << ")" << std::endl
                   << "\t-b      - be more verbose (print all measurements)" << std::endl
                   << "\t-s      - shuffle templates before identification" << std::endl
                   << "\t-w      - force output file to be rewritten if already existed" << std::endl;
@@ -68,6 +70,9 @@ int main(int argc, char *argv[])
             case 'p':
                 detpoints = QString(++argv[0]).toUInt();
                 break;
+            case 'f':
+                confexamples = QString(++argv[0]).toUInt();
+                break;
             case 'd':
                 enabledistractors = true;
                 break;
@@ -101,6 +106,11 @@ int main(int argc, char *argv[])
     if(detpoints < 1) {
         std::cerr << "Number of DET points should be greater than zero! Abort...";
         return 6;
+    }
+    // Let's check confexamples threshold
+    if(confexamples < 1) {
+        std::cerr << "Number of confexamples should be greater than zero! Abort...";
+        return 7;
     }
     // Ok we can go forward
     std::cout << "Input dir:\t" << indir.absolutePath().toStdString() << std::endl;
@@ -347,24 +357,22 @@ int main(int argc, char *argv[])
     vitempl.clear(); vitempl.shrink_to_fit();       
 
     std::cout << std::endl << "Stage 5 - CMC and DET computation" << std::endl << std::endl;
-    const uint confexaples = 3; // how many exaples are needed to count result confident
-
     std::vector<CMCPoint> vCMC = computeCMC(vcandidates,vtruelabel,enrolllabelmax);
     if(vCMC.size() > 0)
         std::cout << "  Best TPIR[1]: "
-                  << QString::number(vCMC[0].mTPIR,'f',-std::ceil(std::log10(static_cast<double>(confexaples)/(validsubdirs * itpp * etpp)))).toStdString()
+                  << QString::number(vCMC[0].mTPIR,'f',validdigits(validsubdirs * itpp * etpp, confexamples)).toStdString()
                   << std::endl;
 
     double bestFPIR = 1.0, bestFNIR = 1.0;
     std::vector<DETPoint> vDET;
     if(distractors > 0) {
-        vDET = computeDET(vcandidates,vtruelabel,enrolllabelmax,detpoints,confexaples);
-        bestFPIR = std::exp(std::log(10.0)*std::ceil(std::log10(static_cast<double>(confexaples)/(distractors * etpp))));
+        vDET = computeDET(vcandidates,vtruelabel,enrolllabelmax,detpoints,confexamples);
+        bestFPIR = std::exp(std::log(10.0) * -validdigits(distractors * etpp, confexamples));
         bestFNIR = findFNIR(vDET,bestFPIR);
         std::cout << "  Best FNIR (FPIR): "
-                  << QString::number(bestFNIR,'f',-std::ceil(std::log10(static_cast<double>(confexaples)/(validsubdirs * itpp * etpp)))).toStdString()
+                  << QString::number(bestFNIR,'f',validdigits(validsubdirs * itpp * etpp, confexamples)).toStdString()
                   << " ("
-                  << QString::number(bestFPIR,'f',-std::ceil(std::log10(static_cast<double>(confexaples)/(distractors * etpp)))).toStdString()
+                  << QString::number(bestFPIR,'f',validdigits(distractors * etpp, confexamples)).toStdString()
                   << ")" << std::endl;
     }
 
@@ -390,7 +398,7 @@ int main(int argc, char *argv[])
     _ejson["Gentime_ms"]  = 1.e-6 * etgentime;
     _ejson["Size_bytes"]  = static_cast<int>(enrolltemplsizebytes);
     _ejson["Rejection_rate"] = std::max(eterrors / static_cast<double>(validsubdirs*etpp),
-                                        confexaples / static_cast<double>(validsubdirs*etpp));
+                                        confexamples / static_cast<double>(validsubdirs*etpp));
     jsonobj["Enrollment"] = _ejson;
     QJsonObject _ijson;
     _ijson["Templates"]   = static_cast<int>(validsubdirs*itpp);
@@ -400,7 +408,7 @@ int main(int argc, char *argv[])
     _ijson["Gentime_ms"]  = 1.e-6 * itgentime;
     _ijson["Size_bytes"]  = static_cast<int>(identtemplsizebytes);
     _ijson["Rejection_rate"] = std::max(iterrors / static_cast<double>(validsubdirs*itpp),
-                                        confexaples / static_cast<double>(validsubdirs*itpp));
+                                        confexamples / static_cast<double>(validsubdirs*itpp));
     jsonobj["Identification"] = _ijson;
 
     jsonobj["Searchtime_us"] = searchtimens * 1.e-3;

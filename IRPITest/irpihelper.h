@@ -170,7 +170,6 @@ struct DETPoint
     double mFNIR, mFPIR, similarity;
 };
 
-
 QJsonArray serializeDET(const std::vector<DETPoint> &_det)
 {
     QJsonArray _jsonarr;
@@ -184,7 +183,11 @@ QJsonArray serializeDET(const std::vector<DETPoint> &_det)
     return _jsonarr;
 }
 
-std::vector<DETPoint> computeDET(const std::vector<std::vector<IRPI::Candidate>> &_vcandidates, const std::vector<size_t> &_vtruelabels, const size_t _enrolllabelmax, const size_t _points, const uint _confexamples)
+std::vector<DETPoint> computeDET(const std::vector<std::vector<IRPI::Candidate>> &_vcandidates,
+                                 const std::vector<size_t> &_vtruelabels,
+                                 const size_t _enrolllabelmax,
+                                 const size_t _points,
+                                 const uint _confexamples=3)
 {
     if(_vcandidates.size() == 0 || _points == 0)
         return std::vector<DETPoint>();
@@ -231,8 +234,6 @@ std::vector<DETPoint> computeDET(const std::vector<std::vector<IRPI::Candidate>>
     return _curve;
 }
 
-
-
 //--------------------------------------------------
 void showTimeConsumption(qint64 secondstotal)
 {
@@ -256,6 +257,13 @@ double findFNIR(const std::vector<DETPoint> &_vdet, const double _fpir)
     return 1.0;
 }
 
+//--------------------------------------------------
+int validdigits(size_t measurements, uint confexamples=3)
+{
+    if(measurements > confexamples)
+        return -std::ceil(std::log10(static_cast<double>(confexamples)/static_cast<double>(measurements)));
+    return 0;
+}
 
 //--------------------------------------------------
 template <typename RandomIt1, typename RandomIt2>

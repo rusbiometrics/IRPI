@@ -4,7 +4,7 @@
 # so only API name should be specified here below
 
 # Specify API name according to the naming convention 'irpi_1N_[vendor]_[version]_(cpu/gpu)' =======
-API_NAME = irpi_1N_dlib_0_cpu
+API_NAME = irpi_1N_null_0_cpu
 
 # If Vendor's API depends on any 3rd parties software you may specify this below
 
@@ -16,8 +16,8 @@ linux {
     # Specify libraries that should be linked
     LIBS += -l$${API_NAME}
 
-    include($${PWD}/../../Sources/API_samples/irpi_Face/$${API_NAME}/opencv.pri)
-    include($${PWD}/../../Sources/API_samples/irpi_Face/$${API_NAME}/dlib.pri)
+    #include($${PWD}/../../Sources/API_samples/irpi_Face/$${API_NAME}/opencv.pri)
+    #include($${PWD}/../../Sources/API_samples/irpi_Face/$${API_NAME}/dlib.pri)
 }
 
 # Section for MS Windows ================================================
@@ -46,3 +46,5 @@ win32 {
 
 # ============
 DEFINES += VENDOR_API_NAME=\\\"$${API_NAME}\\\" # Do not modify
+
+message($${API_NAME} selected for test)
